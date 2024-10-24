@@ -1,0 +1,31 @@
+{
+    "name": "Node.js & TypeScript",
+    "image": "mcr.microsoft.com/devcontainers/typescript-node:1-22-bookworm",
+    
+    // Features to add to the dev container. More info: https://containers.dev/features.
+    // "features": {},
+    
+    // Use 'forwardPorts' to make a list of ports inside the container available locally.
+    // "forwardPorts": [],
+    
+    // Use 'postCreateCommand' to run commands after the container is created.
+    // "postCreateCommand": "yarn install",
+    
+    "customizations": {
+		"vscode": {
+			"extensions": [
+				"dbaeumer.vscode-eslint",
+				"esbenp.prettier-vscode"
+			]
+		},
+        "codespaces": {
+            "repositories": {
+                "dotfiles": {
+                    "repository": "https://github.com/milesburton/dotfiles",
+                    "target": "~/dotfiles",
+                    "installCommand": "fishy-linux.sh"
+                }
+            }
+        }
+    }
+}
