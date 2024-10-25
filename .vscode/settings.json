@@ -1,11 +1,43 @@
 {
-  "editor.formatOnSave": true,
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "editor.rulers": [80, 100],
-  "editor.tabSize": 2,
-  "files.trimTrailingWhitespace": true,
+  "terminal.integrated.profiles.linux": {
+    "fish": {
+      "path": "/usr/bin/fish"
+    }
+  },
   "terminal.integrated.defaultProfile.linux": "fish",
-  "[typescript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  }
+
+  // TypeScript configuration
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // Editor configuration
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  // ESLint configuration
+  "eslint.workingDirectories": [
+    {
+      "mode": "auto"
+    }
+  ],
+
+  // Search configuration
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.turbo": true
+  },
+
+  // File associations
+  "files.associations": {
+    "*.json": "jsonc"
+  },
+
+  // Git configuration
+  "git.ignoreLimitWarning": true,
+
+  // Ensure consistent line endings
+  "files.eol": "\n"
 }
