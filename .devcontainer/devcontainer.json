@@ -10,7 +10,13 @@
         "editor.rulers": [80, 100],
         "editor.tabSize": 2,
         "files.trimTrailingWhitespace": true,
-        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "fish": {
+            "path": "/usr/bin/fish",
+            "args": []
+          }
+        },
+        "terminal.integrated.defaultProfile.linux": "fish",
         "[typescript]": {
           "editor.defaultFormatter": "esbenp.prettier-vscode"
         },
@@ -21,12 +27,13 @@
           "editor.defaultFormatter": "esbenp.prettier-vscode"
         }
       },
-      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
-    },
-    "codespaces": {
-      "dotfilesRepository": "https://github.com/milesburton/dotfiles",
-      "dotfilesTargetPath": "~/dotfiles",
-      "dotfilesInstallCommand": "~/dotfiles/fishy-linux.sh"
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
+      "features": {
+        "ghcr.io/jpawlowski/devcontainer-features/codespaces-dotfiles:1": {
+          "repository": "https://github.com/milesburton/dotfiles.git"
+        }
+      }
     }
-  }
+  },
+  "postCreateCommand": "if [ ! -d \"$HOME/.dotfiles\" ]; then git clone https://github.com/milesburton/dotfiles.git $HOME/.dotfiles && $HOME/.dotfiles/install.sh; fi"
 }
