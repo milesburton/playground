@@ -50,8 +50,6 @@ export class Renderer {
         }
       }
     }
-
-    this.drawGameInfo(gameState);
   }
 
   public clearCanvas(): void {
@@ -297,14 +295,15 @@ export class Renderer {
     this.ctx.fill();
   }
 
-
   public drawCueStick(cueBall: Ball, angle: number, power: number): void {
     const cueLength = 150;
     const grabDistance = 150;
 
     // Calculate cue positions
-    const tipX = cueBall.position.x + Math.cos(angle) * (cueBall.radius + power * 50);
-    const tipY = cueBall.position.y + Math.sin(angle) * (cueBall.radius + power * 50);
+    const tipX =
+      cueBall.position.x + Math.cos(angle) * (cueBall.radius + power * 50);
+    const tipY =
+      cueBall.position.y + Math.sin(angle) * (cueBall.radius + power * 50);
 
     const grabX = cueBall.position.x - Math.cos(angle) * grabDistance;
     const grabY = cueBall.position.y - Math.sin(angle) * grabDistance;
@@ -325,7 +324,7 @@ export class Renderer {
     this.ctx.strokeStyle = '#666';
     this.ctx.lineWidth = 2;
     this.ctx.stroke();
-}
+  }
 
   private drawCueTip(x: number, y: number): void {
     this.ctx.beginPath();
@@ -423,106 +422,14 @@ export class Renderer {
     this.ctx.stroke();
   }
 
-  public drawGameInfo(gameState: GameState): void {
-    const padding = 20;
-    const textColor = '#FFFFFF';
+  // Update the physics method in Physics class
+  public applyShot(cueBall: Ball, angle: number, power: number): void {
+    const maxSpeed = 15; // Maximum initial velocity
+    const velocity = power * maxSpeed;
 
-    this.ctx.save();
-    this.ctx.fillStyle = textColor;
-    this.ctx.font = '16px Arial';
-    this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'top';
-
-    // Draw current player
-    this.drawPlayerInfo(gameState, padding);
-
-    // Draw game state messages
-    this.drawGameStateMessages(gameState, padding);
-
-    // Draw winner if game is over
-    if (gameState.gameOver) {
-      this.drawWinnerMessage(gameState);
-    }
-
-    this.ctx.restore();
-  }
-
-  private drawPlayerInfo(gameState: GameState, padding: number): void {
-    // Current player
-    this.ctx.fillText(
-      `Player ${gameState.currentPlayer}'s Turn`,
-      padding,
-      padding
-    );
-
-    // Player types (if assigned)
-    if (gameState.player1Type) {
-      this.ctx.fillText(
-        `P1: ${gameState.player1Type.toUpperCase()}`,
-        padding,
-        padding + 25
-      );
-      this.ctx.fillText(
-        `P2: ${gameState.player2Type?.toUpperCase()}`,
-        padding,
-        padding + 50
-      );
-    }
-  }
-
-  private drawGameStateMessages(gameState: GameState, padding: number): void {
-    if (gameState.isBreakShot) {
-      this.ctx.fillText('BREAK SHOT', padding, padding + 75);
-    }
-  }
-
-  private drawWinnerMessage(gameState: GameState): void {
-    if (!gameState.winner) return;
-
-    const centerX = this.tableDimensions.width / 2;
-    const centerY = this.tableDimensions.height / 2;
-
-    // Draw semi-transparent background
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    this.ctx.fillRect(centerX - 150, centerY - 40, 300, 80);
-
-    // Draw winner text
-    this.ctx.fillStyle = '#FFD700';
-    this.ctx.font = 'bold 24px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.fillText(`Player ${gameState.winner} Wins!`, centerX, centerY);
-  }
-
-  public drawDebugInfo(gameState: GameState): void {
-    if (!gameState.debug) return;
-
-    const padding = 10;
-    const lineHeight = 20;
-    let y = padding;
-
-    this.ctx.fillStyle = '#FFFFFF';
-    this.ctx.font = '12px monospace';
-    this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'top';
-
-    // Draw ball velocities
-    gameState.balls.forEach((ball) => {
-      if (!ball.isPocketed) {
-        this.ctx.fillText(
-          `Ball ${ball.id}: v(${ball.velocity.x.toFixed(2)}, ${ball.velocity.y.toFixed(2)})`,
-          padding,
-          y
-        );
-        y += lineHeight;
-      }
-    });
-
-    // Draw current power
-    this.ctx.fillText(
-      `Power: ${(gameState.cuePower * 100).toFixed(1)}%`,
-      padding,
-      y
-    );
+    cueBall.velocity = {
+      x: Math.cos(angle) * velocity,
+      y: Math.sin(angle) * velocity,
+    };
   }
 }

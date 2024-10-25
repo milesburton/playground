@@ -1,143 +1,223 @@
-// physics.ts
-import { Ball, Vector2D, TableDimensions } from './types';
-import { MIN_SPEED } from './constants';
+// src/game/physics.ts
+import {
+  Ball,
+  Vector2D,
+  TableDimensions,
+  FRICTION,
+  MIN_SPEED,
+  CUSHION_RESTITUTION,
+  BALL_RESTITUTION,
+} from './types';
 
 export class Physics {
-    private dimensions: TableDimensions;
+  private dimensions: TableDimensions;
+  private readonly MAX_VELOCITY = 20;
+  private collisionEvents: Set<string> = new Set();
 
-    constructor(dimensions: TableDimensions) {
-        this.dimensions = dimensions;
-    }
+  constructor(dimensions: TableDimensions) {
+    this.dimensions = dimensions;
+  }
 
-    /**
-     * Update the positions and velocities of all balls based on deltaTime.
-     * @param balls - Array of balls to update
-     * @param deltaTime - Time in seconds since the last update
-     * @returns Whether any ball is still moving
-     */
-    public updateBalls(balls: Ball[], deltaTime: number): boolean {
-        let anyMoving = false;
+  public updateBalls(balls: Ball[]): boolean {
+    let anyBallMoving = false;
+    this.collisionEvents.clear();
 
-        balls.forEach(ball => {
-            if (ball.isPocketed) return;
-
-            // Update position based on velocity and deltaTime
-            ball.position.x += ball.velocity.x * deltaTime;
-            ball.position.y += ball.velocity.y * deltaTime;
-
-            // Apply friction or other deceleration factors
-            this.applyFriction(ball, deltaTime);
-
-            // Handle collisions with the table boundaries
-            this.handleTableCollisions(ball);
-
-            // Check if the ball is moving above the minimum speed threshold
-            if (Math.abs(ball.velocity.x) > MIN_SPEED || Math.abs(ball.velocity.y) > MIN_SPEED) {
-                anyMoving = true;
-            } else {
-                // Stop the ball if it's below the minimum speed threshold
-                ball.velocity.x = 0;
-                ball.velocity.y = 0;
-            }
-        });
-
-        return anyMoving;
-    }
-
-    /**
-     * Apply friction to slow down the ball's velocity over time.
-     * @param ball - The ball to apply friction to
-     * @param deltaTime - Time in seconds since the last update
-     */
-    private applyFriction(ball: Ball, deltaTime: number): void {
-        const frictionCoefficient = 0.99; // Friction factor per second
-        const friction = Math.pow(frictionCoefficient, deltaTime); // Frame-rate independent friction
-
-        ball.velocity.x *= friction;
-        ball.velocity.y *= friction;
-    }
-
-    /**
-     * Handle collisions of a ball with the table boundaries.
-     * Reverses the ball's velocity when it collides with a wall.
-     * @param ball - The ball to check for boundary collisions
-     */
-    private handleTableCollisions(ball: Ball): void {
-        const { width, height } = this.dimensions;
-
-        // Left and right boundary collision
-        if (ball.position.x <= ball.radius || ball.position.x >= width - ball.radius) {
-            ball.velocity.x *= -1; // Reverse x velocity
-            ball.position.x = Math.max(ball.radius, Math.min(ball.position.x, width - ball.radius));
+    // Update all balls
+    for (const ball of balls) {
+      if (!ball.isPocketed) {
+        this.updateBallPhysics(ball);
+        if (this.isBallMoving(ball)) {
+          anyBallMoving = true;
         }
+      }
+    }
 
-        // Top and bottom boundary collision
-        if (ball.position.y <= ball.radius || ball.position.y >= height - ball.radius) {
-            ball.velocity.y *= -1; // Reverse y velocity
-            ball.position.y = Math.max(ball.radius, Math.min(ball.position.y, height - ball.radius));
+    // Handle collisions after updating positions
+    this.handleCollisions(balls);
+
+    return anyBallMoving;
+  }
+
+  public applyShot(cueBall: Ball, angle: number, power: number): void {
+    const velocity = power * this.MAX_VELOCITY;
+    cueBall.velocity = {
+      x: Math.cos(angle) * velocity,
+      y: Math.sin(angle) * velocity,
+    };
+    cueBall.velocity = this.clampVelocity(cueBall.velocity);
+  }
+
+  private updateBallPhysics(ball: Ball): void {
+    if (ball.isPocketed) return;
+
+    // Update position
+    ball.position = this.addVectors(ball.position, ball.velocity);
+
+    // Apply friction
+    ball.velocity = this.multiplyVector(ball.velocity, FRICTION);
+
+    // Stop balls below minimum speed
+    if (this.getVectorMagnitude(ball.velocity) < MIN_SPEED) {
+      ball.velocity = { x: 0, y: 0 };
+    }
+
+    // Handle cushion collisions
+    this.handleCushionCollision(ball);
+  }
+
+  private handleCollisions(balls: Ball[]): void {
+    for (let i = 0; i < balls.length; i++) {
+      for (let j = i + 1; j < balls.length; j++) {
+        if (!balls[i].isPocketed && !balls[j].isPocketed) {
+          this.handleBallCollision(balls[i], balls[j]);
         }
+      }
+    }
+  }
+
+  private handleCushionCollision(ball: Ball): void {
+    const { cushionWidth, width, height } = this.dimensions;
+
+    // Calculate effective boundaries
+    const minX = cushionWidth + ball.radius;
+    const maxX = width - cushionWidth - ball.radius;
+    const minY = cushionWidth + ball.radius;
+    const maxY = height - cushionWidth - ball.radius;
+
+    let newVelocity: Vector2D = { ...ball.velocity };
+    let newPosition: Vector2D = { ...ball.position };
+
+    // Handle x-axis collisions
+    if (ball.position.x < minX) {
+      newPosition.x = minX;
+      newVelocity.x = -ball.velocity.x * CUSHION_RESTITUTION;
+    } else if (ball.position.x > maxX) {
+      newPosition.x = maxX;
+      newVelocity.x = -ball.velocity.x * CUSHION_RESTITUTION;
     }
 
-    /**
-     * Calculates the distance between two points in 2D space.
-     * @param point1 - The first point
-     * @param point2 - The second point
-     * @returns The distance between the two points
-     */
-    public static calculateDistance(point1: Vector2D, point2: Vector2D): number {
-        const dx = point2.x - point1.x;
-        const dy = point2.y - point1.y;
-        return Math.sqrt(dx * dx + dy * dy);
+    // Handle y-axis collisions
+    if (ball.position.y < minY) {
+      newPosition.y = minY;
+      newVelocity.y = -ball.velocity.y * CUSHION_RESTITUTION;
+    } else if (ball.position.y > maxY) {
+      newPosition.y = maxY;
+      newVelocity.y = -ball.velocity.y * CUSHION_RESTITUTION;
     }
 
-    /**
-     * Checks if two balls are colliding based on their positions and radii.
-     * @param ball1 - The first ball
-     * @param ball2 - The second ball
-     * @returns True if the balls are colliding, otherwise false
-     */
-    public static areBallsColliding(ball1: Ball, ball2: Ball): boolean {
-        const distance = Physics.calculateDistance(ball1.position, ball2.position);
-        return distance < ball1.radius + ball2.radius;
+    // Update ball state
+    ball.position = newPosition;
+    ball.velocity = this.clampVelocity(newVelocity);
+  }
+
+  private handleBallCollision(ball1: Ball, ball2: Ball): void {
+    // Create unique collision ID to prevent double handling
+    const collisionId = this.getCollisionId(ball1, ball2);
+    if (this.collisionEvents.has(collisionId)) return;
+
+    const collisionVector = this.subtractVectors(
+      ball2.position,
+      ball1.position
+    );
+    const distance = this.getVectorMagnitude(collisionVector);
+
+    if (distance < ball1.radius + ball2.radius) {
+      const normalVector = this.normalizeVector(collisionVector);
+      const relativeVelocity = this.subtractVectors(
+        ball1.velocity,
+        ball2.velocity
+      );
+      const velocityAlongNormal = this.dotProduct(
+        relativeVelocity,
+        normalVector
+      );
+
+      // Only resolve if balls are moving towards each other
+      if (velocityAlongNormal > 0) return;
+
+      // Calculate impulse
+      const restitution = BALL_RESTITUTION;
+      const impulseStrength = -(1 + restitution) * velocityAlongNormal;
+      const impulse = this.multiplyVector(normalVector, impulseStrength);
+
+      // Apply impulse
+      ball1.velocity = this.subtractVectors(ball1.velocity, impulse);
+      ball2.velocity = this.addVectors(ball2.velocity, impulse);
+
+      // Prevent ball overlap
+      const overlap = (ball1.radius + ball2.radius - distance) / 2;
+      const separationVector = this.multiplyVector(normalVector, overlap);
+
+      ball1.position = this.subtractVectors(ball1.position, separationVector);
+      ball2.position = this.addVectors(ball2.position, separationVector);
+
+      // Record collision
+      this.collisionEvents.add(collisionId);
+
+      // Clamp velocities
+      ball1.velocity = this.clampVelocity(ball1.velocity);
+      ball2.velocity = this.clampVelocity(ball2.velocity);
     }
+  }
 
-    /**
-     * Resolves a collision between two balls by updating their velocities based on an elastic collision model.
-     * @param ball1 - The first ball
-     * @param ball2 - The second ball
-     */
-    public static resolveBallCollision(ball1: Ball, ball2: Ball): void {
-        // Calculate the normal vector between the balls
-        const normal = {
-            x: ball2.position.x - ball1.position.x,
-            y: ball2.position.y - ball1.position.y
-        };
-        const distance = Physics.calculateDistance(ball1.position, ball2.position);
+  // Vector Operations
+  private normalizeVector(vector: Vector2D): Vector2D {
+    const magnitude = this.getVectorMagnitude(vector);
+    if (magnitude === 0) return { x: 0, y: 0 };
+    return {
+      x: vector.x / magnitude,
+      y: vector.y / magnitude,
+    };
+  }
 
-        if (distance === 0) return; // Prevent division by zero
+  private getVectorMagnitude(vector: Vector2D): number {
+    return Math.sqrt(vector.x * vector.x + vector.y * vector.y);
+  }
 
-        // Normalize the normal vector
-        normal.x /= distance;
-        normal.y /= distance;
+  private addVectors(v1: Vector2D, v2: Vector2D): Vector2D {
+    return {
+      x: v1.x + v2.x,
+      y: v1.y + v2.y,
+    };
+  }
 
-        // Relative velocity along the normal
-        const relativeVelocity = {
-            x: ball2.velocity.x - ball1.velocity.x,
-            y: ball2.velocity.y - ball1.velocity.y
-        };
-        const velocityAlongNormal = relativeVelocity.x * normal.x + relativeVelocity.y * normal.y;
+  private subtractVectors(v1: Vector2D, v2: Vector2D): Vector2D {
+    return {
+      x: v1.x - v2.x,
+      y: v1.y - v2.y,
+    };
+  }
 
-        // If the balls are moving apart, no need to resolve
-        if (velocityAlongNormal > 0) return;
+  private multiplyVector(vector: Vector2D, scalar: number): Vector2D {
+    return {
+      x: vector.x * scalar,
+      y: vector.y * scalar,
+    };
+  }
 
-        // Calculate the impulse scalar
-        const restitution = 1.0; // Elastic collision
-        const impulse = -(1 + restitution) * velocityAlongNormal;
+  private dotProduct(v1: Vector2D, v2: Vector2D): number {
+    return v1.x * v2.x + v1.y * v2.y;
+  }
 
-        // Apply the impulse to both balls
-        ball1.velocity.x -= impulse * normal.x;
-        ball1.velocity.y -= impulse * normal.y;
-        ball2.velocity.x += impulse * normal.x;
-        ball2.velocity.y += impulse * normal.y;
+  private clampVelocity(velocity: Vector2D): Vector2D {
+    const magnitude = this.getVectorMagnitude(velocity);
+    if (magnitude > this.MAX_VELOCITY) {
+      const scale = this.MAX_VELOCITY / magnitude;
+      return this.multiplyVector(velocity, scale);
     }
+    return velocity;
+  }
+
+  // Utility Methods
+  private getCollisionId(ball1: Ball, ball2: Ball): string {
+    return `${Math.min(ball1.id, ball2.id)}-${Math.max(ball1.id, ball2.id)}`;
+  }
+
+  private isBallMoving(ball: Ball): boolean {
+    return this.getVectorMagnitude(ball.velocity) > MIN_SPEED;
+  }
+
+  public reset(): void {
+    this.collisionEvents.clear();
+  }
 }
