@@ -297,44 +297,91 @@ export class Renderer {
 
   public drawCueStick(cueBall: Ball, angle: number, power: number): void {
     const cueLength = 150;
-    const grabDistance = 150;
+    const gripLength = 40; // Length of the grip section
 
     // Calculate cue positions
-    const tipX =
-      cueBall.position.x + Math.cos(angle) * (cueBall.radius + power * 50);
-    const tipY =
-      cueBall.position.y + Math.sin(angle) * (cueBall.radius + power * 50);
+    const tipX = cueBall.position.x + Math.cos(angle) * (cueBall.radius + power * 50);
+    const tipY = cueBall.position.y + Math.sin(angle) * (cueBall.radius + power * 50);
 
-    const grabX = cueBall.position.x - Math.cos(angle) * grabDistance;
-    const grabY = cueBall.position.y - Math.sin(angle) * grabDistance;
+    // Calculate grip end position (opposite end from tip)
+    const gripX = tipX - Math.cos(angle) * cueLength;
+    const gripY = tipY - Math.sin(angle) * cueLength;
 
-    // Draw cue stick
+    // Draw cue shadow
+    this.ctx.beginPath();
+    this.ctx.moveTo(tipX + 2, tipY + 2);
+    this.ctx.lineTo(gripX + 2, gripY + 2);
+    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+    this.ctx.lineWidth = 8;
+    this.ctx.stroke();
+
+    // Draw main cue stick
     this.ctx.beginPath();
     this.ctx.moveTo(tipX, tipY);
-    this.ctx.lineTo(grabX, grabY);
-    this.ctx.strokeStyle = '#8B4513';
+    this.ctx.lineTo(gripX, gripY);
+    const gradient = this.ctx.createLinearGradient(tipX, tipY, gripX, gripY);
+    gradient.addColorStop(0, '#F4D03F');   // Lighter tip
+    gradient.addColorStop(0.1, '#8B4513'); // Dark wood
+    gradient.addColorStop(0.7, '#D35400'); // Medium wood
+    gradient.addColorStop(1, '#8B4513');   // Dark wood end
+    this.ctx.strokeStyle = gradient;
     this.ctx.lineWidth = 6;
     this.ctx.stroke();
 
-    // Draw grab area
-    this.ctx.beginPath();
-    this.ctx.arc(grabX, grabY, 10, 0, Math.PI * 2);
-    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-    this.ctx.fill();
-    this.ctx.strokeStyle = '#666';
-    this.ctx.lineWidth = 2;
-    this.ctx.stroke();
-  }
+    // Draw grip section (at the end opposite to the tip)
+    const gripSection = {
+        startX: gripX + Math.cos(angle) * gripLength,
+        startY: gripY + Math.sin(angle) * gripLength,
+        endX: gripX,
+        endY: gripY
+    };
 
-  private drawCueTip(x: number, y: number): void {
+    // Draw grip highlight
     this.ctx.beginPath();
-    this.ctx.arc(x, y, this.CUE_STICK.TIP_RADIUS, 0, Math.PI * 2);
+    this.ctx.moveTo(gripSection.startX, gripSection.startY);
+    this.ctx.lineTo(gripSection.endX, gripSection.endY);
+    this.ctx.strokeStyle = '#2C3E50'; // Darker grip color
+    this.ctx.lineWidth = 8;
+    this.ctx.stroke();
+
+    // Draw grip pattern
+    for (let i = 0; i < 5; i++) {
+        const t = i / 4;
+        const x = gripSection.startX + (gripSection.endX - gripSection.startX) * t;
+        const y = gripSection.startY + (gripSection.endY - gripSection.startY) * t;
+
+        this.ctx.beginPath();
+        this.ctx.arc(x, y, 4, 0, Math.PI * 2);
+        this.ctx.fillStyle = '#95A5A6';
+        this.ctx.fill();
+    }
+
+    // Draw grip area indicator when not shooting
+    if (power === 0) {
+        // Draw grip area glow
+        this.ctx.beginPath();
+        this.ctx.arc(gripX, gripY, 15, 0, Math.PI * 2);
+        this.ctx.fillStyle = 'rgba(46, 204, 113, 0.3)';
+        this.ctx.fill();
+
+        // Add pulsing effect
+        const pulseSize = 10 + Math.sin(Date.now() / 500) * 3;
+        this.ctx.beginPath();
+        this.ctx.arc(gripX, gripY, pulseSize, 0, Math.PI * 2);
+        this.ctx.strokeStyle = '#2ECC71';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+    }
+
+    // Draw cue tip
+    this.ctx.beginPath();
+    this.ctx.arc(tipX, tipY, 3, 0, Math.PI * 2);
     this.ctx.fillStyle = '#1B4F72';
     this.ctx.fill();
     this.ctx.strokeStyle = '#000000';
     this.ctx.lineWidth = 1;
     this.ctx.stroke();
-  }
+}
 
   public drawPowerMeter(power: number): void {
     const x = this.POWER_METER.MARGIN;
