@@ -1,203 +1,79 @@
-// Vector for positions and velocities
+// src/game/types.ts
+
+// Vector2D: A simple 2D vector type
 export interface Vector2D {
   x: number;
   y: number;
 }
 
-// Ball properties
+// Ball: Defines properties of each ball in the game
 export interface Ball {
-  id: number;
-  position: Vector2D;
-  velocity: Vector2D;
-  color: string;
-  number?: number;
-  radius: number;
-  isStriped: boolean;
-  isPocketed: boolean;
-  isCue: boolean;
+  id: number;                    // Unique identifier for each ball
+  number: number;                // Ball number (1-15 for solids/stripes, 0 for cue ball)
+  position: Vector2D;            // Current position on the table
+  velocity: Vector2D;            // Current velocity vector
+  radius: number;                // Radius of the ball
+  isPocketed: boolean;           // Whether the ball has been pocketed
+  wasPocketed: boolean;          // Tracks if the ball was recently pocketed in this frame
+  isCue: boolean;                // True if this is the cue ball
+  isStriped: boolean;            // True for striped balls, false for solids
+  color: string;                 // Color of the ball
+  outlineColor?: string;         // Optional outline color for the ball
 }
 
-// Game state
-export interface GameState {
-  balls: Ball[];
-  currentPlayer: 1 | 2;
-  player1Type: 'stripes' | 'solids' | undefined;
-  player2Type: 'stripes' | 'solids' | undefined;
-  isBreakShot: boolean;
-  isShooting: boolean;
-  gameOver: boolean;
-  winner?: 1 | 2;
-  cueAngle: number;
-  cuePower: number;
-}
-
-// Table dimensions and colors
+// TableDimensions: Dimensions and configuration of the pool table
 export interface TableDimensions {
-  width: number;
-  height: number;
-  cushionWidth: number;
-  pocketRadius: number;
-  feltColor: string;
-  cushionColor: string;
-  pocketColor: string;
+  width: number;                 // Width of the table
+  height: number;                // Height of the table
+  cushionWidth: number;          // Width of the cushion area around the table
+  pocketRadius: number;          // Radius of each pocket
 }
 
-// Physics constants
-export const BALL_RADIUS = 10;
-export const FRICTION = 0.98; // Air and felt friction
-export const MIN_SPEED = 0.01; // Minimum speed before stopping the ball
-export const CUSHION_RESTITUTION = 0.6; // Energy retained after cushion collision
-export const BALL_RESTITUTION = 0.95; // Energy retained after ball collision
-export const MAX_POWER = 1.0; // Maximum shot power
-export const MIN_POWER = 0.1; // Minimum shot power
-
-// Standard table configuration
-export const TABLE_CONFIG: TableDimensions = {
-  width: 800,
-  height: 400,
-  cushionWidth: 20,
-  pocketRadius: 15,
-  feltColor: '#0a4d1c',
-  cushionColor: '#8B4513',
-  pocketColor: '#000000',
-};
-
-// Ball colors mapping
-export const BALL_COLORS: { [key: number]: string } = {
-  1: '#FFD700', // Yellow solid
-  2: '#0000FF', // Blue solid
-  3: '#FF0000', // Red solid
-  4: '#800080', // Purple solid
-  5: '#FFA500', // Orange solid
-  6: '#008000', // Green solid
-  7: '#8B4513', // Brown solid
-  8: '#000000', // Black
-  9: '#FFD700', // Yellow striped
-  10: '#0000FF', // Blue striped
-  11: '#FF0000', // Red striped
-  12: '#800080', // Purple striped
-  13: '#FFA500', // Orange striped
-  14: '#008000', // Green striped
-  15: '#8B4513', // Brown striped
-};
-
-// Game events
-export interface GameEvent {
-  type: GameEventType;
-  data?: any;
+// GameState: Overall state of the game
+export interface GameState {
+  balls: Ball[];                 // Array of all balls in the game
+  cueAngle: number;              // Angle of the cue aim in radians
+  cuePower: number;              // Power applied to the cue ball during a shot
+  currentPlayer: number;         // Current player's turn (1 or 2)
+  player1Type: 'solids' | 'stripes' | null; // Type assigned to player 1
+  player2Type: 'solids' | 'stripes' | null; // Type assigned to player 2
+  isShooting: boolean;           // Whether a shot is currently in progress
+  isBreakShot: boolean;          // True if it's the break shot
+  gameOver: boolean;             // True if the game is over
+  winner: number | null;         // Winner of the game, if applicable (1 or 2)
+  pocketedBalls: Ball[];         // List of balls that have been pocketed
 }
 
-// Event Types
-export enum GameEventType {
-  BALL_POCKETED = 'BALL_POCKETED',
-  CUE_BALL_SCRATCH = 'CUE_BALL_SCRATCH',
-  FOUL = 'FOUL',
-  TURN_END = 'TURN_END',
-  GAME_OVER = 'GAME_OVER',
-  BREAK_SHOT = 'BREAK_SHOT',
-  RAIL_HIT = 'RAIL_HIT',
-  BALL_HIT = 'BALL_HIT',
-  SHOT_TAKEN = 'SHOT_TAKEN',
-}
-
-// Player action types
-export enum PlayerActionType {
-  SHOOT = 'SHOOT',
-  PLACE_CUE_BALL = 'PLACE_CUE_BALL',
-  ADJUST_ANGLE = 'ADJUST_ANGLE',
-  ADJUST_POWER = 'ADJUST_POWER',
-  RESET_SHOT = 'RESET_SHOT',
-  CALL_POCKET = 'CALL_POCKET',
-  REQUEST_TIMEOUT = 'REQUEST_TIMEOUT',
-}
-
-export interface PlayerAction {
-  type: PlayerActionType;
-  data: any;
-}
-
-// Shot data
-export interface ShotData {
-  angle: number;
-  power: number;
-  position: Vector2D;
-}
-
-// Game rules
-export interface GameRules {
-  requireCallShots: boolean;
-  allowPlaceBallAfterScratch: boolean;
-  mustHitRailAfterContact: boolean;
-  foulsLoseTurn: boolean;
-}
-
-// Default game rules
-export const DEFAULT_GAME_RULES: GameRules = {
-  requireCallShots: true,
-  allowPlaceBallAfterScratch: true,
-  mustHitRailAfterContact: true,
-  foulsLoseTurn: true,
-};
-
-// Shot result
+// ShotResult: The result of a single shot
 export interface ShotResult {
-  valid: boolean;
-  ballsPocketed: Ball[];
-  scratch: boolean;
-  railsHit: number;
-  firstBallHit?: Ball;
+  scratch: boolean;              // True if the cue ball was pocketed
+  ballsPocketed: Ball[];         // Array of balls pocketed in the shot
 }
 
-// Game statistics
-export interface GameStatistics {
-  shotsTaken: number;
-  ballsPocketed: number;
-  fouls: number;
-  turns: number;
-  duration: number;
-}
-
-// Player statistics
-export interface PlayerStatistics {
-  player: 1 | 2;
-  shotsTaken: number;
-  ballsPocketed: number;
-  fouls: number;
-  averageShotPower: number;
-}
-
-// Animation states
-export interface AnimationState {
-  isAnimating: boolean;
-  ballsInMotion: boolean;
-  powerBarVisible: boolean;
-  showingShotPreview: boolean;
-}
-
+// GameSettings: Configurations for game setup and play
 export interface GameSettings {
-  friction: number;
-  cushionRestitution: number;
-  ballRestitution: number;
-  maxShotPower: number;
-  minShotPower: number;
-  requireCallShots: boolean;
-  allowPlaceBallAfterScratch: boolean;
-  debug: boolean;
-  soundEnabled?: boolean;
-  showGuideLines?: boolean;
-  showPowerMeter?: boolean;
+  friction: number;              // Friction coefficient for ball deceleration
+  cushionRestitution: number;    // Restitution (bounciness) for cushion collisions
+  ballRestitution: number;       // Restitution for ball-ball collisions
 }
+
+// Constants for physics and gameplay
+export const FRICTION = 0.98;               // Friction applied to ball movement
+export const MIN_SPEED = 0.02;              // Minimum speed threshold to stop a ball
+export const CUSHION_RESTITUTION = 0.9;     // Cushion collision restitution
+export const BALL_RESTITUTION = 0.9;        // Ball collision restitution
+export const BALL_RADIUS = 10;              // Standard radius for balls on the table
+
+// Default configurations for TableDimensions and GameSettings
+export const TABLE_CONFIG: TableDimensions = {
+  width: 800,                      // Width of the table in pixels
+  height: 400,                     // Height of the table in pixels
+  cushionWidth: 20,                // Width of the cushion in pixels
+  pocketRadius: 15                 // Radius of each pocket in pixels
+};
 
 export const DEFAULT_GAME_SETTINGS: GameSettings = {
   friction: FRICTION,
   cushionRestitution: CUSHION_RESTITUTION,
-  ballRestitution: BALL_RESTITUTION,
-  maxShotPower: 1.0,
-  minShotPower: 0.1,
-  requireCallShots: true,
-  allowPlaceBallAfterScratch: true,
-  debug: false,
-  soundEnabled: true,
-  showGuideLines: true,
-  showPowerMeter: true,
+  ballRestitution: BALL_RESTITUTION
 };
