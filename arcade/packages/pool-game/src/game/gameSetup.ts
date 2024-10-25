@@ -376,25 +376,6 @@ export class GameSetup {
     this.resetCueState();
   }
 
-  // Player Type Assignment
-  private assignPlayerTypes(firstPocketedIsStriped: boolean): void {
-    if (this.gameState.currentPlayer === 1) {
-      this.gameState.player1Type = firstPocketedIsStriped
-        ? 'stripes'
-        : 'solids';
-      this.gameState.player2Type = firstPocketedIsStriped
-        ? 'solids'
-        : 'stripes';
-    } else {
-      this.gameState.player1Type = firstPocketedIsStriped
-        ? 'solids'
-        : 'stripes';
-      this.gameState.player2Type = firstPocketedIsStriped
-        ? 'stripes'
-        : 'solids';
-    }
-  }
-
   // Utility Methods
   private getMousePosition(event: MouseEvent): Vector2D {
     const rect = this.canvas.getBoundingClientRect();

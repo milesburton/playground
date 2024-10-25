@@ -39,5 +39,5 @@
   "git.ignoreLimitWarning": true,
 
   // Ensure consistent line endings
-  "files.eol": "\n",
+  "files.eol": "\n"
 }

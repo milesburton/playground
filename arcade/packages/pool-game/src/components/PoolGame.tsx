@@ -1,4 +1,3 @@
-// src/components/PoolGame.tsx
 import { useEffect, useRef, useState } from 'react';
 import { GameSetup } from '../game/gameSetup';
 import { GameState, TABLE_CONFIG } from '../game/types';
