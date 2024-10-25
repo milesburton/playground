@@ -4,6 +4,7 @@ export const FRICTION_COEFFICIENT = 0.02;
 export const MINIMUM_SPEED = 0.01;
 export const RESTITUTION = 0.8;
 export const CUE_POWER_MULTIPLIER = 0.2;
+export const MIN_SPEED = 0.02;
 
 export const INITIAL_BALL_POSITIONS = [
   // Cue ball
@@ -45,5 +46,3 @@ export interface TableDimensions {
   cushionColor: string;
   pocketColor: string;
 }
-
-

@@ -1,293 +1,380 @@
-// src/game/gameSetup.ts
 import { Renderer } from './render';
 import { Physics } from './physics';
 import {
-  TableDimensions,
-  TABLE_CONFIG,
-  GameState,
-  Vector2D,
-  MIN_SPEED,
-  Ball,
+    TableDimensions,
+    TABLE_CONFIG,
+    GameState,
+    Vector2D,
+    Ball,
+    MIN_SPEED,
+    ShotResult,
+    GameSettings,
+    DEFAULT_GAME_SETTINGS
 } from './types';
 import { createInitialState, updateGameState } from './gameState';
 
+interface CueState {
+  isHoldingCue: boolean;
+  dragStartPosition: Vector2D | null;
+  dragCurrentPosition: Vector2D | null;
+  cueOffset: number;
+  maxDrawback: number;
+  currentDrawback: number;
+}
+
+// Configurations and Constants
+const CUE_GRAB_DISTANCE = 20;
+const MAX_DRAWBACK = 150;
+const POWER_SCALING = 0.007;
+const SHOT_COOLDOWN = 500; // ms
+const PHYSICS_STEP = 1000 / 120; // 120 Hz physics updates
+
 export class GameSetup {
-  // Core components
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private renderer: Renderer;
-  private physics: Physics;
-  private dimensions: TableDimensions;
-  private gameState: GameState;
+    // Core components
+    private readonly canvas: HTMLCanvasElement;
+    private readonly ctx: CanvasRenderingContext2D;
+    private readonly renderer: Renderer;
+    private readonly physics: Physics;
+    private readonly dimensions: TableDimensions;
+    private gameState: GameState;
+    private settings: GameSettings;
 
-  // Animation and game loop
-  private animationFrameId?: number;
-  private lastFrameTime: number = 0;
-  private readonly FPS = 60;
-  private readonly frameInterval = 1000 / this.FPS;
+    // Animation and game loop
+    private animationFrameId?: number;
+    private lastFrameTime: number = 0;
+    private accumulator: number = 0;
 
-  // Shot mechanics
-  private isSettingPower: boolean = false;
-  private powerAccumulator: number = 0;
-  private readonly POWER_INCREASE_RATE = 0.02;
-  private readonly MAX_POWER = 1.0;
-  private readonly MIN_POWER = 0.1;
-  private dragStart: Vector2D | null = null;
-
-  constructor(
-    canvas: HTMLCanvasElement,
-    context: CanvasRenderingContext2D,
-    dimensions: TableDimensions = TABLE_CONFIG
-  ) {
-    this.canvas = canvas;
-    this.ctx = context;
-    this.dimensions = dimensions;
-    this.renderer = new Renderer(context, dimensions);
-    this.physics = new Physics(dimensions);
-    this.gameState = createInitialState();
-
-    this.init();
-  }
-
-  private init(): void {
-    // Set up canvas
-    this.setupCanvas();
-
-    // Set up event listeners
-    this.setupEventListeners();
-
-    // Start game loop
-    this.startGameLoop();
-  }
-
-  private setupCanvas(): void {
-    // Set canvas dimensions
-    this.canvas.width = this.dimensions.width;
-    this.canvas.height = this.dimensions.height;
-
-    // Set canvas style for crisp rendering
-    this.ctx.imageSmoothingEnabled = true;
-    this.ctx.imageSmoothingQuality = 'high';
-  }
-
-  private setupEventListeners(): void {
-    this.canvas.addEventListener('mousedown', this.handleMouseDown);
-    this.canvas.addEventListener('mousemove', this.handleMouseMove);
-    this.canvas.addEventListener('mouseup', this.handleMouseUp);
-    this.canvas.addEventListener('mouseleave', this.handleMouseLeave);
-    window.addEventListener('keydown', this.handleKeyPress);
-
-    // Prevent context menu on right click
-    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  }
-
-  private getMousePosition(event: MouseEvent): Vector2D {
-    const rect = this.canvas.getBoundingClientRect();
-    const scaleX = this.canvas.width / rect.width;
-    const scaleY = this.canvas.height / rect.height;
-
-    return {
-      x: (event.clientX - rect.left) * scaleX,
-      y: (event.clientY - rect.top) * scaleY,
+    // Cue control
+    private cueState: CueState = {
+      isHoldingCue: false,
+      dragStartPosition: null,
+      dragCurrentPosition: null,
+      cueOffset: 0,
+      maxDrawback: MAX_DRAWBACK,
+      currentDrawback: 0
     };
-  }
 
-  private handleMouseDown = (event: MouseEvent): void => {
-    if (this.isBallsMoving() || this.gameState.gameOver) return;
+    private lastShotTime: number = 0;
 
-    const mousePos = this.getMousePosition(event);
-    this.dragStart = mousePos;
+    constructor(
+        canvas: HTMLCanvasElement,
+        context: CanvasRenderingContext2D,
+        dimensions: TableDimensions = TABLE_CONFIG,
+        settings: GameSettings = DEFAULT_GAME_SETTINGS
+    ) {
+        this.canvas = canvas;
+        this.ctx = context;
+        this.dimensions = dimensions;
+        this.settings = settings;
+        this.renderer = new Renderer(context, dimensions);
+        this.physics = new Physics(dimensions);
+        this.gameState = createInitialState();
 
-    if (event.button === 0) {
-      // Left click
-      const cueBall = this.getCueBall();
-      if (cueBall && this.isNearCueBall(mousePos, cueBall)) {
-        this.gameState.isShooting = true;
-        this.isSettingPower = true;
-        this.powerAccumulator = 0;
-      }
+        this.initialize();
     }
-  };
 
-  private handleMouseMove = (event: MouseEvent): void => {
-    if (this.isBallsMoving() || this.gameState.gameOver) return;
+    // Initialization of Game
+    private initialize(): void {
+        this.setupCanvas();
+        this.setupEventListeners();
+        this.startGameLoop();
+    }
 
-    const mousePos = this.getMousePosition(event);
+    // Canvas and Event Listeners Setup
+    private setupCanvas(): void {
+        this.canvas.width = this.dimensions.width;
+        this.canvas.height = this.dimensions.height;
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.imageSmoothingQuality = 'high';
+    }
 
-    if (this.gameState.isShooting) {
-      const cueBall = this.getCueBall();
-      if (cueBall) {
-        // Calculate angle from mouse to cue ball (reversed)
-        const dx = cueBall.position.x - mousePos.x; // Reversed these coordinates
-        const dy = cueBall.position.y - mousePos.y;
+    private setupEventListeners(): void {
+        this.canvas.addEventListener('mousedown', this.handleMouseDown as EventListener);
+        this.canvas.addEventListener('mousemove', this.handleMouseMove as EventListener);
+        this.canvas.addEventListener('mouseup', this.handleMouseUp as EventListener);
+        this.canvas.addEventListener('mouseleave', this.handleMouseLeave as EventListener);
+
+        this.canvas.addEventListener('touchstart', this.handleTouchStart as EventListener);
+        this.canvas.addEventListener('touchmove', this.handleTouchMove as EventListener);
+        this.canvas.addEventListener('touchend', this.handleTouchEnd as EventListener);
+
+        window.addEventListener('keydown', this.handleKeyPress as EventListener);
+        window.addEventListener('resize', this.handleResize);
+
+        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+        this.canvas.addEventListener('selectstart', (e) => e.preventDefault());
+    }
+
+    // Main Game Loop
+    private startGameLoop(): void {
+        this.lastFrameTime = performance.now();
+        this.animationFrameId = requestAnimationFrame(this.gameLoop);
+    }
+
+    private gameLoop = (timestamp: number): void => {
+        const deltaTime = (timestamp - this.lastFrameTime) / 1000; // Convert to seconds
+        this.lastFrameTime = timestamp;
+
+        this.accumulator += deltaTime;
+        while (this.accumulator >= PHYSICS_STEP / 1000) {
+            this.update(deltaTime);
+            this.accumulator -= PHYSICS_STEP / 1000;
+        }
+
+        this.render();
+        this.animationFrameId = requestAnimationFrame(this.gameLoop);
+    };
+
+    private update(deltaTime: number): void {
+        if (this.isBallsMoving()) {
+            this.physics.updateBalls(this.gameState.balls, deltaTime); // Pass deltaTime to updateBalls
+            this.checkTableState();
+        }
+    }
+
+    private render(): void {
+        this.renderer.render(this.gameState);
+    }
+
+    // Input Event Handlers
+    private handleMouseDown = (event: MouseEvent): void => {
+        if (this.shouldSkipShot()) return;
+
+        const mousePos = this.getMousePosition(event);
+        const cueBall = this.getCueBall();
+        if (!cueBall || cueBall.isPocketed) return;
+
+        const distanceToCue = this.calculateDistance(mousePos, cueBall.position);
+        if (distanceToCue < CUE_GRAB_DISTANCE) {
+            this.cueState.isHoldingCue = true;
+            this.cueState.dragStartPosition = mousePos;
+            this.gameState.isShooting = true;
+        }
+    };
+
+    private handleMouseMove = (event: MouseEvent): void => {
+        if (this.shouldSkipShot()) return;
+
+        const mousePos = this.getMousePosition(event);
+        const cueBall = this.getCueBall();
+        if (!cueBall || cueBall.isPocketed) return;
+
+        this.cueState.isHoldingCue ? this.updateCueDrawback(mousePos) : this.updateCueAngle(mousePos, cueBall);
+    };
+
+    private handleMouseUp = (): void => {
+        if (this.shouldSkipShot() || !this.cueState.isHoldingCue) return;
+
+        const cueBall = this.getCueBall();
+        if (cueBall && this.cueState.currentDrawback > CUE_GRAB_DISTANCE) {
+            this.executeShot(cueBall);
+            this.lastShotTime = Date.now();
+        }
+        this.resetCueState();
+    };
+
+    private handleMouseLeave = (): void => this.resetCueState();
+
+    private handleTouchStart = (event: TouchEvent): void => {
+        const touch = event.touches[0];
+        this.handleMouseDown(new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY }));
+    };
+
+    private handleTouchMove = (event: TouchEvent): void => {
+        const touch = event.touches[0];
+        this.handleMouseMove(new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY }));
+    };
+
+    private handleTouchEnd = (): void => this.handleMouseUp();
+
+    private handleKeyPress = (event: KeyboardEvent): void => {
+        if (event.key === 'r' && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            this.resetGame();
+        } else if (event.key === 'Escape') {
+            this.resetCueState();
+        }
+    };
+
+    private handleResize = (): void => {
+        const parentWidth = this.canvas.parentElement?.clientWidth || this.dimensions.width;
+        const scale = parentWidth / this.dimensions.width;
+        this.canvas.style.width = `${this.dimensions.width * scale}px`;
+        this.canvas.style.height = `${this.dimensions.height * scale}px`;
+        this.canvas.width = this.dimensions.width;
+        this.canvas.height = this.dimensions.height;
+    };
+
+    // Cue Interaction Methods
+    private updateCueDrawback(mousePos: Vector2D): void {
+        const dragVector = {
+            x: mousePos.x - (this.cueState.dragStartPosition?.x || 0),
+            y: mousePos.y - (this.cueState.dragStartPosition?.y || 0)
+        };
+        const cueVector = {
+            x: Math.cos(this.gameState.cueAngle),
+            y: Math.sin(this.gameState.cueAngle)
+        };
+        const projection = dragVector.x * cueVector.x + dragVector.y * cueVector.y;
+
+        this.cueState.cueOffset = Math.max(0, projection);
+        this.cueState.currentDrawback = Math.min(this.cueState.cueOffset, this.cueState.maxDrawback);
+        this.gameState.cuePower = this.calculatePowerFromDrawback(this.cueState.currentDrawback);
+    }
+
+    private updateCueAngle(mousePos: Vector2D, cueBall: Ball): void {
+        const dx = mousePos.x - cueBall.position.x;
+        const dy = mousePos.y - cueBall.position.y;
         this.gameState.cueAngle = Math.atan2(dy, dx);
-      }
     }
 
-    // Update power based on drag distance if setting power
-    if (this.isSettingPower && this.dragStart) {
-      const distance = this.calculateDistance(this.dragStart, mousePos);
-      this.powerAccumulator = Math.min(distance / 200, this.MAX_POWER);
-      this.gameState.cuePower = this.powerAccumulator;
-    }
-  };
-
-  private handleMouseUp = (event: MouseEvent): void => {
-    if (this.isBallsMoving() || this.gameState.gameOver) return;
-
-    if (this.gameState.isShooting && this.isSettingPower) {
-      const cueBall = this.getCueBall();
-      if (cueBall) {
-        this.executeShot(cueBall);
-      }
+    private calculateDistance(point1: Vector2D, point2: Vector2D): number {
+        const dx = point2.x - point1.x;
+        const dy = point2.y - point1.y;
+        return Math.sqrt(dx * dx + dy * dy);
     }
 
-    this.resetShotState();
-  };
-
-  private handleMouseLeave = (): void => {
-    if (this.isSettingPower) {
-      this.resetShotState();
-    }
-  };
-
-  private handleKeyPress = (event: KeyboardEvent): void => {
-    // Add any keyboard controls here
-    if (event.key === 'r' && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      this.resetGame();
-    }
-  };
-
-  private resetShotState(): void {
-    this.gameState.isShooting = false;
-    this.isSettingPower = false;
-    this.powerAccumulator = 0;
-    this.gameState.cuePower = 0;
-    this.dragStart = null;
-  }
-
-  private executeShot(cueBall: Ball): void {
-    if (this.powerAccumulator >= this.MIN_POWER) {
-      this.physics.applyShot(
-        cueBall,
-        this.gameState.cueAngle, // Removed the + Math.PI
-        this.powerAccumulator
-      );
-    }
-  }
-
-  private getCueBall(): Ball | undefined {
-    return this.gameState.balls.find((ball) => ball.isCue);
-  }
-
-  private isNearCueBall(mousePos: Vector2D, cueBall: Ball): boolean {
-    const distance = this.calculateDistance(mousePos, cueBall.position);
-    return distance <= cueBall.radius * 3; // Allow some margin for easier interaction
-  }
-
-  private calculateDistance(point1: Vector2D, point2: Vector2D): number {
-    const dx = point2.x - point1.x;
-    const dy = point2.y - point1.y;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
-  private isBallsMoving(): boolean {
-    return this.gameState.balls.some(
-      (ball) =>
-        !ball.isPocketed &&
-        (Math.abs(ball.velocity.x) > MIN_SPEED ||
-          Math.abs(ball.velocity.y) > MIN_SPEED)
-    );
-  }
-
-  private update(deltaTime: number): void {
-    // Update power while shooting
-    if (this.isSettingPower) {
-      this.powerAccumulator = Math.min(
-        this.powerAccumulator + this.POWER_INCREASE_RATE * deltaTime,
-        this.MAX_POWER
-      );
-      this.gameState.cuePower = this.powerAccumulator;
+    // Game State Updates
+    private executeShot(cueBall: Ball): void {
+        const power = this.calculatePowerFromDrawback(this.cueState.currentDrawback);
+        this.physics.applyShot(cueBall, this.gameState.cueAngle, power);
+        this.gameState.isShooting = false;
+        this.checkTableState();
     }
 
-    // Update physics
-    if (this.isBallsMoving()) {
-      this.physics.updateBalls(this.gameState.balls);
-
-      // Check for pocketed balls and update game state
-      if (!this.isBallsMoving()) {
-        const result = updateGameState(this.gameState, this.dimensions);
-        this.handleShotResult(result);
-      }
-    }
-  }
-
-  private render(): void {
-    this.renderer.render(this.gameState);
-  }
-
-  private gameLoop = (timestamp: number): void => {
-    // Calculate delta time
-    const deltaTime = timestamp - this.lastFrameTime;
-
-    // Only update if enough time has passed
-    if (deltaTime >= this.frameInterval) {
-      this.lastFrameTime = timestamp - (deltaTime % this.frameInterval);
-
-      // Update game state
-      this.update(deltaTime);
-
-      // Render frame
-      this.render();
+    private checkTableState(): void {
+        if (!this.isBallsMoving()) {
+            const result = updateGameState(this.gameState, this.dimensions);
+            this.handleShotResult(result);
+        }
     }
 
-    // Request next frame
-    this.animationFrameId = requestAnimationFrame(this.gameLoop);
-  };
-
-  private startGameLoop(): void {
-    if (!this.animationFrameId) {
-      this.animationFrameId = requestAnimationFrame(this.gameLoop);
+    private handleShotResult(result: ShotResult): void {
+        if (result.scratch) this.handleScratch();
+        if (result.ballsPocketed.length) this.handlePocketedBalls(result.ballsPocketed);
+        if (this.gameState.gameOver) this.handleGameOver();
     }
-  }
 
-  private handleShotResult(result: any): void {
-    // Handle any post-shot logic, animations, or state changes
-    if (result.scratch) {
-      // Handle scratch
-      this.resetCueBall();
+    // Handle Scratch
+    private handleScratch(): void {
+        const cueBall = this.getCueBall();
+        if (cueBall) {
+            this.resetCueBall();
+            this.gameState.currentPlayer = this.gameState.currentPlayer === 1 ? 2 : 1;
+        }
     }
-  }
 
-  private resetCueBall(): void {
-    const cueBall = this.getCueBall();
-    if (cueBall) {
-      cueBall.position = {
-        x: this.dimensions.width * 0.25,
-        y: this.dimensions.height / 2,
-      };
-      cueBall.velocity = { x: 0, y: 0 };
-      cueBall.isPocketed = false;
+    // Handle Pocketed Balls
+    private handlePocketedBalls(pocketedBalls: Ball[]): void {
+        if (this.gameState.isBreakShot && !pocketedBalls[0]?.isCue) {
+            this.assignPlayerTypes(pocketedBalls[0].isStriped);
+            this.gameState.isBreakShot = false;
+        }
+
+        if (pocketedBalls.some(ball => ball.number === 8)) {
+            this.handleBlackBallPocketed();
+        }
     }
-  }
 
-  public resetGame(): void {
-    this.gameState = createInitialState();
-    this.resetShotState();
-  }
-
-  public destroy(): void {
-    // Clean up event listeners
-    this.canvas.removeEventListener('mousedown', this.handleMouseDown);
-    this.canvas.removeEventListener('mousemove', this.handleMouseMove);
-    this.canvas.removeEventListener('mouseup', this.handleMouseUp);
-    this.canvas.removeEventListener('mouseleave', this.handleMouseLeave);
-    window.removeEventListener('keydown', this.handleKeyPress);
-
-    // Cancel animation frame
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
+    private assignPlayerTypes(firstPocketedIsStriped: boolean): void {
+        if (this.gameState.currentPlayer === 1) {
+            this.gameState.player1Type = firstPocketedIsStriped ? 'stripes' : 'solids';
+            this.gameState.player2Type = firstPocketedIsStriped ? 'solids' : 'stripes';
+        } else {
+            this.gameState.player1Type = firstPocketedIsStriped ? 'solids' : 'stripes';
+            this.gameState.player2Type = firstPocketedIsStriped ? 'stripes' : 'solids';
+        }
     }
-  }
+
+    private handleBlackBallPocketed(): void {
+        const currentPlayerType = this.gameState.currentPlayer === 1
+            ? this.gameState.player1Type
+            : this.gameState.player2Type;
+
+        const hasRemainingBalls = this.gameState.balls.some(ball =>
+            !ball.isPocketed &&
+            !ball.isCue &&
+            ball.number !== 8 &&
+            (ball.isStriped === (currentPlayerType === 'stripes'))
+        );
+
+        this.gameState.gameOver = true;
+        this.gameState.winner = !hasRemainingBalls
+            ? this.gameState.currentPlayer
+            : (this.gameState.currentPlayer === 1 ? 2 : 1);
+    }
+
+    private handleGameOver(): void {
+        this.gameState.isShooting = false;
+        this.resetCueState();
+    }
+
+    private shouldSkipShot(): boolean {
+        return this.isBallsMoving() || this.gameState.gameOver || Date.now() - this.lastShotTime < SHOT_COOLDOWN;
+    }
+
+    private getMousePosition(event: MouseEvent): Vector2D {
+        const rect = this.canvas.getBoundingClientRect();
+        return {
+            x: (event.clientX - rect.left) * (this.canvas.width / rect.width),
+            y: (event.clientY - rect.top) * (this.canvas.height / rect.height)
+        };
+    }
+
+    private calculatePowerFromDrawback(drawback: number): number {
+        return Math.min(drawback * POWER_SCALING, 1);
+    }
+
+    private resetCueBall(): void {
+        const cueBall = this.getCueBall();
+        if (cueBall) {
+            cueBall.position = {
+                x: this.dimensions.width * 0.25,
+                y: this.dimensions.height / 2
+            };
+            cueBall.velocity = { x: 0, y: 0 };
+            cueBall.isPocketed = false;
+        }
+    }
+
+    private resetCueState(): void {
+        this.cueState = { isHoldingCue: false, dragStartPosition: null, dragCurrentPosition: null, cueOffset: 0, maxDrawback: MAX_DRAWBACK, currentDrawback: 0 };
+        this.gameState.isShooting = false;
+    }
+
+    private isBallsMoving(): boolean {
+        return this.gameState.balls.some(ball => !ball.isPocketed && (Math.abs(ball.velocity.x) > MIN_SPEED || Math.abs(ball.velocity.y) > MIN_SPEED));
+    }
+
+    private getCueBall(): Ball | undefined {
+        return this.gameState.balls.find(ball => ball.isCue);
+    }
+
+    public resetGame(): void {
+        this.gameState = createInitialState();
+        this.resetCueState();
+        this.lastShotTime = 0;
+        this.accumulator = 0;
+    }
+
+    public destroy(): void {
+        this.canvas.removeEventListener('mousedown', this.handleMouseDown as EventListener);
+        this.canvas.removeEventListener('mousemove', this.handleMouseMove as EventListener);
+        this.canvas.removeEventListener('mouseup', this.handleMouseUp as EventListener);
+        this.canvas.removeEventListener('mouseleave', this.handleMouseLeave as EventListener);
+
+        this.canvas.removeEventListener('touchstart', this.handleTouchStart as EventListener);
+        this.canvas.removeEventListener('touchmove', this.handleTouchMove as EventListener);
+        this.canvas.removeEventListener('touchend', this.handleTouchEnd as EventListener);
+
+        window.removeEventListener('keydown', this.handleKeyPress as EventListener);
+        window.removeEventListener('resize', this.handleResize);
+
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = undefined;
+        }
+
+        this.resetGame();
+    }
 }

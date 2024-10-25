@@ -1,5 +1,3 @@
-// src/game/types.ts
-
 // Vector for positions and velocities
 export interface Vector2D {
   x: number;
@@ -61,7 +59,7 @@ export const TABLE_CONFIG: TableDimensions = {
   pocketRadius: 15,
   feltColor: '#0a4d1c',
   cushionColor: '#8B4513',
-  pocketColor: '#000000'
+  pocketColor: '#000000',
 };
 
 // Ball colors mapping
@@ -89,12 +87,17 @@ export interface GameEvent {
   data?: any;
 }
 
+// Event Types
 export enum GameEventType {
   BALL_POCKETED = 'BALL_POCKETED',
+  CUE_BALL_SCRATCH = 'CUE_BALL_SCRATCH',
   FOUL = 'FOUL',
   TURN_END = 'TURN_END',
   GAME_OVER = 'GAME_OVER',
   BREAK_SHOT = 'BREAK_SHOT',
+  RAIL_HIT = 'RAIL_HIT',
+  BALL_HIT = 'BALL_HIT',
+  SHOT_TAKEN = 'SHOT_TAKEN',
 }
 
 // Player action types
@@ -103,6 +106,9 @@ export enum PlayerActionType {
   PLACE_CUE_BALL = 'PLACE_CUE_BALL',
   ADJUST_ANGLE = 'ADJUST_ANGLE',
   ADJUST_POWER = 'ADJUST_POWER',
+  RESET_SHOT = 'RESET_SHOT',
+  CALL_POCKET = 'CALL_POCKET',
+  REQUEST_TIMEOUT = 'REQUEST_TIMEOUT',
 }
 
 export interface PlayerAction {
@@ -135,11 +141,11 @@ export const DEFAULT_GAME_RULES: GameRules = {
 
 // Shot result
 export interface ShotResult {
-  validShot: boolean;
+  valid: boolean;
   ballsPocketed: Ball[];
+  scratch: boolean;
   railsHit: number;
   firstBallHit?: Ball;
-  scratch: boolean;
 }
 
 // Game statistics
@@ -167,3 +173,31 @@ export interface AnimationState {
   powerBarVisible: boolean;
   showingShotPreview: boolean;
 }
+
+export interface GameSettings {
+  friction: number;
+  cushionRestitution: number;
+  ballRestitution: number;
+  maxShotPower: number;
+  minShotPower: number;
+  requireCallShots: boolean;
+  allowPlaceBallAfterScratch: boolean;
+  debug: boolean;
+  soundEnabled?: boolean;
+  showGuideLines?: boolean;
+  showPowerMeter?: boolean;
+}
+
+export const DEFAULT_GAME_SETTINGS: GameSettings = {
+  friction: FRICTION,
+  cushionRestitution: CUSHION_RESTITUTION,
+  ballRestitution: BALL_RESTITUTION,
+  maxShotPower: 1.0,
+  minShotPower: 0.1,
+  requireCallShots: true,
+  allowPlaceBallAfterScratch: true,
+  debug: false,
+  soundEnabled: true,
+  showGuideLines: true,
+  showPowerMeter: true,
+};
