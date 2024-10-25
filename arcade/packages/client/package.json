@@ -1,0 +1,11 @@
+{
+  "name": "@arcade/client",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts"
+}
