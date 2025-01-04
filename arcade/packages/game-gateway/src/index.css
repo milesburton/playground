@@ -1,0 +1,11 @@
+/* src/index.css */
+@import url('https://fonts.googleapis.com/css2?family=Monoton&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* src/index.css */
+body {
+  background: radial-gradient(circle at center, #2c3e50, #000000 80%);
+}

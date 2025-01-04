@@ -7,6 +7,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
+    "jsx": "react-jsx",
     "composite": true,
     "declaration": true,
     "declarationMap": true,
@@ -14,8 +15,7 @@
   },
   "references": [
     { "path": "packages/common" },
-    { "path": "packages/server" },
-    { "path": "packages/client" }
+    { "path": "packages/server" }
   ],
   "exclude": ["node_modules"]
 }
